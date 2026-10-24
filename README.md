@@ -76,8 +76,10 @@ To publish a release:
 3. Push an annotated tag matching the project version:
 
 ```powershell
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
+git tag -a v1.0.1 -m "Release v1.0.1"
+git push origin v1.0.1
 ```
 
 The tag workflow validates the version, builds the app, runs its checks, packages it, and verifies checksums. Only after those steps succeed does it publish a GitHub release with the executable, ZIP, and checksum file. No personal access token or extra repository secret is required; the release job uses the repository's `GITHUB_TOKEN`.
+
+© stud0709 · [Project homepage](https://github.com/stud0709/moment-for-you)

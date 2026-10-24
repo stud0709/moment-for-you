@@ -1,9 +1,11 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Navigation;
 using Forms = System.Windows.Forms;
 
 namespace MomentForYou;
@@ -37,6 +39,12 @@ public partial class BreakWindow : Window
     }
 
     public void Dismiss() { allowClose = true; Close(); }
+    private void OnProjectHomepage(object sender, RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Win32Exception) { System.Windows.Clipboard.SetText(e.Uri.AbsoluteUri); }
+    }
     private void OnDone(object sender, RoutedEventArgs e) => finish();
     private void OnKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; finish(); } }
     private void OnClosing(object? sender, CancelEventArgs e)

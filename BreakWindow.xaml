@@ -29,5 +29,8 @@
         </StackPanel>
       </Grid>
     </Viewbox>
+    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="16,0,16,20" FontSize="12" Foreground="{StaticResource Muted}">
+      <Run Text="© stud0709   ·   "/><Hyperlink NavigateUri="https://github.com/stud0709/moment-for-you" RequestNavigate="OnProjectHomepage" Foreground="{StaticResource Accent}">Project homepage</Hyperlink>
+    </TextBlock>
   </Grid>
 </Window>
