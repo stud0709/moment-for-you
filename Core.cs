@@ -1,0 +1,69 @@
+using System;
+using System.IO;
+using System.Text.Json;
+
+namespace MomentForYou;
+
+public sealed class Settings
+{
+    public int IntervalMinutes { get; set; } = 20;
+    public static bool IsValidInterval(int value) => value >= 1 && value <= 240;
+    // Retain the settings location so rebranding preserves existing intervals.
+    public static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EyeProtect", "settings.json");
+
+    public static Settings Load(string? path = null)
+    {
+        try
+        {
+            var settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path ?? FilePath));
+            return settings != null && IsValidInterval(settings.IntervalMinutes) ? settings : new Settings();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return new Settings(); }
+    }
+
+    public void Save(string? path = null)
+    {
+        if (!IsValidInterval(IntervalMinutes)) throw new ArgumentOutOfRangeException(nameof(IntervalMinutes));
+        var destination = path ?? FilePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
+        var temporary = destination + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        File.Move(temporary, destination, true);
+    }
+}
+
+// All deadlines use monotonic time, so wall-clock adjustments cannot trigger a break.
+public sealed class BreakSchedule
+{
+    public int IntervalMinutes { get; private set; }
+    public bool Paused { get; private set; }
+    public bool InBreak { get; private set; }
+    private TimeSpan nextBreak;
+    private TimeSpan lastTick;
+
+    public BreakSchedule(int intervalMinutes, TimeSpan now) { SetInterval(intervalMinutes, now); }
+    public void SetInterval(int minutes, TimeSpan now)
+    {
+        if (!Settings.IsValidInterval(minutes)) throw new ArgumentOutOfRangeException(nameof(minutes));
+        IntervalMinutes = minutes;
+        Reset(now);
+    }
+    public void Reset(TimeSpan now) { nextBreak = now + TimeSpan.FromMinutes(IntervalMinutes); lastTick = now; }
+    public void SetPaused(bool paused, TimeSpan now) { Paused = paused; Reset(now); }
+    public bool Tick(TimeSpan now)
+    {
+        // A suspended PC or stalled session gets a fresh interval on return.
+        if (now - lastTick > TimeSpan.FromSeconds(30) && !InBreak) Reset(now);
+        lastTick = now;
+        return !Paused && !InBreak && now >= nextBreak;
+    }
+    public void StartBreak() { InBreak = true; }
+    public bool FinishBreak(TimeSpan now)
+    {
+        if (!InBreak) return false;
+        InBreak = false;
+        Reset(now);
+        return true;
+    }
+    public TimeSpan UntilBreak(TimeSpan now) => nextBreak > now ? nextBreak - now : TimeSpan.Zero;
+}

@@ -1,0 +1,89 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and check Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build, test, and package
+        run: ./scripts/Build.ps1
+      - name: Upload release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64
+          path: artifacts/release/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload self-test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: self-test-results
+          path: artifacts/self-test-results.txt
+          if-no-files-found: warn
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download tested Windows build
+        run: gh run download "$GITHUB_RUN_ID" --name windows-x64 --dir release
+      - name: Verify checksums
+        working-directory: release
+        run: sha256sum --check SHA256SUMS.txt
+      - name: Upload assets and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG_NAME" --json isDraft --jq .isDraft > release-state.txt; then
+            if [ "$(cat release-state.txt)" != "true" ]; then
+              echo "Release $TAG_NAME is already published."
+              exit 0
+            fi
+            gh release upload "$TAG_NAME" release/* --clobber
+          else
+            gh release create "$TAG_NAME" release/* --draft --verify-tag \
+              --title "A moment for you $TAG_NAME" \
+              --notes-file "docs/releases/$TAG_NAME.md"
+          fi
+          gh release edit "$TAG_NAME" --draft=false --latest
