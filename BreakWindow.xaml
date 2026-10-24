@@ -29,8 +29,10 @@
         </StackPanel>
       </Grid>
     </Viewbox>
-    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="16,0,16,20" FontSize="12" Foreground="{StaticResource Muted}">
-      <Run Text="© stud0709   ·   "/><Hyperlink NavigateUri="https://github.com/stud0709/moment-for-you" RequestNavigate="OnProjectHomepage" Foreground="{StaticResource Accent}">Project homepage</Hyperlink>
-    </TextBlock>
+    <Border x:Name="Footer" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24" Panel.ZIndex="10">
+      <TextBlock FontSize="12" Foreground="{StaticResource Muted}">
+        <Run x:Name="FooterVersion"/><Run Text=" · © stud0709 · "/><Hyperlink x:Name="HomepageLink" NavigateUri="https://github.com/stud0709/moment-for-you" RequestNavigate="OnProjectHomepage" Foreground="{StaticResource Accent}">Project homepage</Hyperlink>
+      </TextBlock>
+    </Border>
   </Grid>
 </Window>

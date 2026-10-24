@@ -21,7 +21,7 @@ $packageRoot = Join-Path $stagingRoot 'package'
 New-Item -ItemType Directory -Path $releaseRoot, $packageRoot -Force | Out-Null
 
 & dotnet publish $projectPath -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
     -p:DebugType=None -p:DebugSymbols=false -o $publishRoot
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
 

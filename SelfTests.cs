@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 
 namespace MomentForYou;
 
@@ -77,6 +80,62 @@ internal static class SelfTests
             Assert(!schedule.Tick(At(4000)), "Reminder fired after sleep.");
             Assert(schedule.UntilBreak(At(4000)) == TimeSpan.FromMinutes(20), "Gap failed to reset.");
         });
+        Test("Lock, screensaver and sleep stop reminders and start a full interval on return", () =>
+        {
+            foreach (var reason in new[] { AwayReason.SessionLocked, AwayReason.ScreenSaver, AwayReason.Sleep })
+            {
+                var schedule = new BreakSchedule(1, At(0));
+                schedule.SetAway(reason, true, At(20));
+                Assert(schedule.UntilBreak(At(4000)) == At(40), "Countdown continued while away: " + reason);
+                Assert(!schedule.Tick(At(4000)), "Reminder fired while away: " + reason);
+                schedule.SetAway(reason, false, At(4000));
+                Assert(schedule.UntilBreak(At(4000)) == At(60), "Return did not start a full interval: " + reason);
+                for (int second = 4001; second < 4060; second++) Assert(!schedule.Tick(At(second)), "Reminder fired before the new interval elapsed.");
+                Assert(schedule.Tick(At(4060)), "Reminder did not fire after the full new interval.");
+            }
+        });
+        Test("Unlock does not resume reminders while the screensaver is still running", () =>
+        {
+            var schedule = new BreakSchedule(1, At(0));
+            schedule.SetAway(AwayReason.ScreenSaver, true, At(10));
+            schedule.SetAway(AwayReason.SessionLocked, true, At(20));
+            schedule.SetAway(AwayReason.SessionLocked, false, At(100));
+            Assert(schedule.Suspended && !schedule.Tick(At(1000)), "Unlock cleared the screensaver pause.");
+            Assert(schedule.UntilBreak(At(1000)) == At(50), "Overlapping pauses changed the remaining time.");
+            schedule.SetAway(AwayReason.ScreenSaver, false, At(1000));
+            Assert(!schedule.Suspended && schedule.UntilBreak(At(1000)) == At(60), "Screensaver exit did not start a full new interval.");
+        });
+        Test("Repeated screensaver polls do not reset the new interval after returning", () =>
+        {
+            var schedule = new BreakSchedule(1, At(0));
+            schedule.SetAway(AwayReason.ScreenSaver, true, At(10));
+            for (int second = 11; second <= 100; second++) schedule.SetAway(AwayReason.ScreenSaver, true, At(second));
+            schedule.SetAway(AwayReason.ScreenSaver, false, At(100));
+            for (int second = 101; second < 160; second++)
+            {
+                schedule.SetAway(AwayReason.ScreenSaver, false, At(second));
+                Assert(!schedule.Tick(At(second)), "Screensaver polling fired a reminder early.");
+            }
+            Assert(schedule.Tick(At(160)), "Screensaver polling pushed the deadline back.");
+        });
+        Test("Returning from a lock preserves a manual pause", () =>
+        {
+            var schedule = new BreakSchedule(1, At(0));
+            schedule.SetPaused(true, At(0));
+            schedule.SetAway(AwayReason.SessionLocked, true, At(10));
+            schedule.SetAway(AwayReason.SessionLocked, false, At(100));
+            Assert(schedule.Paused && !schedule.Suspended, "Unlock changed the manual pause.");
+            for (int second = 101; second <= 200; second++) Assert(!schedule.Tick(At(second)), "Unlock resumed a manually paused reminder.");
+        });
+        Test("Changing the interval while away keeps the new interval frozen", () =>
+        {
+            var schedule = new BreakSchedule(1, At(0));
+            schedule.SetAway(AwayReason.ScreenSaver, true, At(10));
+            schedule.SetInterval(2, At(20));
+            Assert(schedule.UntilBreak(At(1000)) == At(120), "New interval counted down while away.");
+            schedule.SetAway(AwayReason.ScreenSaver, false, At(1000));
+            Assert(schedule.UntilBreak(At(1000)) == At(120), "New interval did not restart in full.");
+        });
         Test("Invalid interval bounds rejected", () =>
         {
             foreach (int value in new[] { -1, 0, 241, int.MaxValue })
@@ -126,6 +185,21 @@ internal static class SelfTests
             }
             finally { window.Dismiss(); }
         });
+        Test("Clicking Project homepage requests Done before opening the browser", () =>
+        {
+            var actions = new List<string>();
+            Uri? opened = null;
+            var window = new BreakWindow(() => actions.Add("Done"), uri => { actions.Add("Open"); opened = uri; });
+            try
+            {
+                var link = (Hyperlink)window.FindName("HomepageLink");
+                var request = new RequestNavigateEventArgs(link.NavigateUri, "") { RoutedEvent = Hyperlink.RequestNavigateEvent };
+                link.RaiseEvent(request);
+                Assert(request.Handled && string.Join(",", actions) == "Done,Open", "Homepage did not finish the break before opening.");
+                Assert(opened?.AbsoluteUri == "https://github.com/stud0709/moment-for-you", "Wrong project homepage opened.");
+            }
+            finally { window.Dismiss(); }
+        });
         Test("Connected monitor inventory has positive physical bounds", () =>
         {
             var screens = System.Windows.Forms.Screen.AllScreens;
@@ -152,6 +226,36 @@ internal static class SelfTests
             }
         });
         Test("Native tray icon, menu, pause and resume", () => ((App)Application.Current).VerifyTray());
+        Test("Version, author credit and homepage remain in the lower-right corner at common display scales", () =>
+        {
+            var window = new BreakWindow(() => { });
+            try
+            {
+                var scene = (FrameworkElement)window.Content;
+                var footer = (Border)window.FindName("Footer");
+                var version = (Run)window.FindName("FooterVersion");
+                var link = (Hyperlink)window.FindName("HomepageLink");
+                Assert(version.Text == "v" + Assembly.GetExecutingAssembly().GetName().Version!.ToString(3), "Footer version does not match the executable.");
+                foreach (var display in new[] { (1920, 1200, 1.25), (1920, 1080, 1.0), (1280, 800, 1.5), (1024, 768, 1.0) })
+                {
+                    var size = new Size(display.Item1 / display.Item3, display.Item2 / display.Item3);
+                    VisualTreeHelper.SetRootDpi(scene, new DpiScale(display.Item3, display.Item3));
+                    scene.Measure(size);
+                    scene.Arrange(new Rect(new Point(), size));
+                    scene.UpdateLayout();
+                    var origin = footer.TranslatePoint(new Point(), scene);
+                    Assert(footer.Visibility == Visibility.Visible && footer.ActualWidth > 0 && footer.ActualHeight > 0, "Footer has no visible layout.");
+                    Assert(origin.X >= 0 && origin.Y >= 0, "Footer is clipped at the top or left.");
+                    Assert(Math.Abs(size.Width - origin.X - footer.ActualWidth - 24) < 1, "Footer is not inset from the right edge.");
+                    Assert(Math.Abs(size.Height - origin.Y - footer.ActualHeight - 24) < 1, "Footer is not inset from the bottom edge.");
+                }
+                Assert((link.Inlines.FirstInline as Run)?.Text == "Project homepage", "Project homepage label is incorrect.");
+                Assert(link.NavigateUri.AbsoluteUri == "https://github.com/stud0709/moment-for-you", "Project homepage URL is incorrect.");
+                Assert((version.NextInline as Run)?.Text == " · © stud0709 · ", "Author credit is missing.");
+                Assert(((TextBlock)footer.Child).FontSize == 12, "Footer font size does not match the Take your time text.");
+            }
+            finally { window.Dismiss(); }
+        });
 
         results.Add($"{results.FindAll(x => x.StartsWith("PASS ")).Count} passed; {failures} failed.");
         Directory.CreateDirectory("artifacts");
@@ -166,6 +270,8 @@ internal static class SelfTests
         {
             RenderElement((FrameworkElement)window.Content, path, 1280, 800);
             var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+            // Match the user's 1920×1200 monitor at 125% scaling as well.
+            RenderElement((FrameworkElement)window.Content, Path.Combine(directory, "break-screen-1920x1200.png"), 1920, 1200, 1.25);
             var settings = new SettingsWindow((App)Application.Current);
             try
             {
@@ -181,13 +287,13 @@ internal static class SelfTests
         finally { window.Dismiss(); }
     }
 
-    private static void RenderElement(FrameworkElement scene, string path, int width, int height)
+    private static void RenderElement(FrameworkElement scene, string path, int width, int height, double scale = 1)
     {
-        VisualTreeHelper.SetRootDpi(scene, new DpiScale(1, 1));
-        scene.Measure(new Size(width, height));
-        scene.Arrange(new Rect(0, 0, width, height));
+        VisualTreeHelper.SetRootDpi(scene, new DpiScale(scale, scale));
+        scene.Measure(new Size(width / scale, height / scale));
+        scene.Arrange(new Rect(0, 0, width / scale, height / scale));
         scene.UpdateLayout();
-        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        var bitmap = new RenderTargetBitmap(width, height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
         bitmap.Render(scene);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));

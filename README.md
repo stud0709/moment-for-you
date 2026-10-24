@@ -10,6 +10,8 @@ Every **20 minutes** by default, an opaque break window covers each connected mo
 
 There is **no countdown**. The **Done** button is available immediately, so you can take your time and dismiss the screen when you return. Clicking Done on any monitor closes all break windows and starts a fresh reminder interval. **Esc** or **Alt+F4** also dismisses the break.
 
+The **Project homepage** link in the lower-right corner also dismisses all break windows before opening the project in your browser.
+
 ## Get started
 
 1. Open [Releases](https://github.com/stud0709/moment-for-you/releases/latest), download the **win-x64.zip**, and extract it.
@@ -33,7 +35,9 @@ Closing the settings window keeps the app running in the notification area. The 
 | **Pause reminders / Resume reminders** | Pause automatic reminders; resuming starts a full new interval. |
 | **Exit** | Dismiss every break window and quit. |
 
-Reminders restart their interval after sleep or unlocking Windows. Connecting or disconnecting a monitor during a break rebuilds the windows while keeping the break open. The app supports per-monitor scaling and monitors positioned to the left of the primary screen.
+The countdown stops while Windows is locked, a screensaver is running, or the PC is asleep. When you return, it starts over with a full new interval; if both a lock and screensaver are active, both must end first. A manual pause stays in effect until you choose Resume reminders. If a break is already showing when you leave, it is dismissed and a full interval waits for your return.
+
+Connecting or disconnecting a monitor during a break rebuilds the windows while keeping the break open. The app supports per-monitor scaling and monitors positioned to the left of the primary screen.
 
 This is a break reminder, not a Windows security lock. Windows shortcuts, the secure desktop, and some privileged or exclusive fullscreen windows can still take precedence.
 
@@ -59,7 +63,7 @@ dotnet run -c Release --no-build -- --self-test
 dotnet run -c Release --no-build -- --render-preview artifacts/break-preview.png
 ```
 
-`--self-test` checks scheduling, immediate dismissal and long breaks, pause/resume, clock gaps, settings persistence and invalid settings, the actual WPF Done button, native window bounds on every connected monitor, and tray menu actions. It writes `artifacts/self-test-results.txt` and returns a nonzero exit code on failure. It briefly creates a tray icon but never displays a break.
+`--self-test` checks scheduling, immediate dismissal and long breaks, pause/resume, lock/screensaver/sleep countdown freezing and overlapping conditions, clock gaps, settings persistence and invalid settings, the actual WPF Done button and homepage action, native window bounds on every connected monitor, tray menu actions, and the version/credit/homepage footer at common screen sizes and scaling settings. It writes `artifacts/self-test-results.txt` and returns a nonzero exit code on failure. It briefly creates a tray icon but never displays a break.
 
 `--render-preview` renders the actual WPF break content and settings window to PNG without covering your desktop. The screenshots above come from this renderer.
 
@@ -76,8 +80,8 @@ To publish a release:
 3. Push an annotated tag matching the project version:
 
 ```powershell
-git tag -a v1.0.1 -m "Release v1.0.1"
-git push origin v1.0.1
+git tag -a v1.0.4 -m "Release v1.0.4"
+git push origin v1.0.4
 ```
 
 The tag workflow validates the version, builds the app, runs its checks, packages it, and verifies checksums. Only after those steps succeed does it publish a GitHub release with the executable, ZIP, and checksum file. No personal access token or extra repository secret is required; the release job uses the repository's `GITHUB_TOKEN`.

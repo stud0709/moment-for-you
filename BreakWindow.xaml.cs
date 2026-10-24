@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -13,8 +14,16 @@ namespace MomentForYou;
 public partial class BreakWindow : Window
 {
     private readonly Action finish;
+    private readonly Action<Uri> openHomepage;
     private bool allowClose;
-    public BreakWindow(Action finish) { InitializeComponent(); this.finish = finish; }
+    public BreakWindow(Action finish, Action<Uri>? openHomepage = null)
+    {
+        InitializeComponent();
+        this.finish = finish;
+        this.openHomepage = openHomepage ?? OpenInBrowser;
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+        FooterVersion.Text = "v" + version!.ToString(3);
+    }
 
     internal void PositionOn(Forms.Screen screen)
     {
@@ -42,8 +51,13 @@ public partial class BreakWindow : Window
     private void OnProjectHomepage(object sender, RequestNavigateEventArgs e)
     {
         e.Handled = true;
-        try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
-        catch (Win32Exception) { System.Windows.Clipboard.SetText(e.Uri.AbsoluteUri); }
+        finish();
+        openHomepage(e.Uri);
+    }
+    private static void OpenInBrowser(Uri uri)
+    {
+        try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Win32Exception) { System.Windows.Clipboard.SetText(uri.AbsoluteUri); }
     }
     private void OnDone(object sender, RoutedEventArgs e) => finish();
     private void OnKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; finish(); } }

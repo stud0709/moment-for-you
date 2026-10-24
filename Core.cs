@@ -32,14 +32,20 @@ public sealed class Settings
     }
 }
 
+[Flags]
+public enum AwayReason { None = 0, SessionLocked = 1, ScreenSaver = 2, Sleep = 4 }
+
 // All deadlines use monotonic time, so wall-clock adjustments cannot trigger a break.
 public sealed class BreakSchedule
 {
     public int IntervalMinutes { get; private set; }
     public bool Paused { get; private set; }
     public bool InBreak { get; private set; }
+    public AwayReason AwayReasons { get; private set; }
+    public bool Suspended => AwayReasons != AwayReason.None;
     private TimeSpan nextBreak;
     private TimeSpan lastTick;
+    private TimeSpan remainingWhileAway;
 
     public BreakSchedule(int intervalMinutes, TimeSpan now) { SetInterval(intervalMinutes, now); }
     public void SetInterval(int minutes, TimeSpan now)
@@ -48,10 +54,25 @@ public sealed class BreakSchedule
         IntervalMinutes = minutes;
         Reset(now);
     }
-    public void Reset(TimeSpan now) { nextBreak = now + TimeSpan.FromMinutes(IntervalMinutes); lastTick = now; }
+    public void Reset(TimeSpan now)
+    {
+        remainingWhileAway = TimeSpan.FromMinutes(IntervalMinutes);
+        nextBreak = now + remainingWhileAway;
+        lastTick = now;
+    }
     public void SetPaused(bool paused, TimeSpan now) { Paused = paused; Reset(now); }
+    public void SetAway(AwayReason reason, bool active, TimeSpan now)
+    {
+        bool wasSuspended = Suspended;
+        AwayReasons = active ? AwayReasons | reason : AwayReasons & ~reason;
+        if (wasSuspended == Suspended) return;
+        if (Suspended) remainingWhileAway = nextBreak > now ? nextBreak - now : TimeSpan.Zero;
+        else Reset(now);
+        lastTick = now;
+    }
     public bool Tick(TimeSpan now)
     {
+        if (Suspended) { lastTick = now; return false; }
         // A suspended PC or stalled session gets a fresh interval on return.
         if (now - lastTick > TimeSpan.FromSeconds(30) && !InBreak) Reset(now);
         lastTick = now;
@@ -65,5 +86,5 @@ public sealed class BreakSchedule
         Reset(now);
         return true;
     }
-    public TimeSpan UntilBreak(TimeSpan now) => nextBreak > now ? nextBreak - now : TimeSpan.Zero;
+    public TimeSpan UntilBreak(TimeSpan now) => Suspended ? remainingWhileAway : nextBreak > now ? nextBreak - now : TimeSpan.Zero;
 }

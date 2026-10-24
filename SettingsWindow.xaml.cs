@@ -16,9 +16,9 @@ public partial class SettingsWindow : Window
     public void Refresh()
     {
         var schedule = app.Schedule;
-        Status.Text = schedule.InBreak ? "Time for a break" : schedule.Paused ? "Reminders are paused" : "Reminders are on";
+        Status.Text = schedule.InBreak ? "Time for a break" : schedule.Paused ? "Reminders are paused" : schedule.Suspended ? "Reminders are paused while you are away" : "Reminders are on";
         var remaining = schedule.UntilBreak(app.Now);
-        NextBreak.Text = schedule.InBreak ? "Look away, move around, and breathe." : schedule.Paused ? "Resume whenever you are ready." : $"Next break in {(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
+        NextBreak.Text = schedule.InBreak ? "Look away, move around, and breathe." : schedule.Paused ? "Resume whenever you are ready." : $"Next break in {(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}" + (schedule.Suspended ? " (paused)" : "");
         PauseButton.Content = schedule.Paused ? "Resume reminders" : "Pause reminders";
     }
     private void OnSave(object sender, RoutedEventArgs e)

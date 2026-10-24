@@ -24,7 +24,6 @@ public partial class App : Application
     private Forms.ToolStripMenuItem? pauseItem;
     private Mutex? instance;
     private bool ownsInstance;
-    private bool sessionLocked;
     public BreakSchedule Schedule { get; private set; } = new(20, TimeSpan.Zero);
     public TimeSpan Now => clock.Elapsed;
 
@@ -39,6 +38,7 @@ public partial class App : Application
 
         settings = Settings.Load();
         Schedule = new BreakSchedule(settings.IntervalMinutes, Now);
+        UpdateDesktopState();
         CreateTray();
         timer.Tick += OnTick;
         timer.Start();
@@ -121,7 +121,8 @@ public partial class App : Application
 
     public void StartBreak()
     {
-        if (Schedule.InBreak || sessionLocked) return;
+        UpdateDesktopState();
+        if (Schedule.InBreak || Schedule.Suspended) return;
         settingsWindow?.Hide();
         Schedule.StartBreak();
         try { OpenOverlays(); }
@@ -158,12 +159,13 @@ public partial class App : Application
 
     private void OnTick(object? sender, EventArgs e)
     {
-        if (!sessionLocked && Schedule.Tick(Now)) StartBreak();
+        UpdateDesktopState();
+        if (Schedule.Tick(Now)) StartBreak();
         settingsWindow?.Refresh();
         if (tray != null)
         {
             var remaining = Schedule.UntilBreak(Now);
-            tray.Text = Schedule.InBreak ? "A moment for you · Take a break" : Schedule.Paused ? "A moment for you · Paused" : $"A moment for you · Next break in {(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
+            tray.Text = Schedule.InBreak ? "A moment for you · Take a break" : Schedule.Paused ? "A moment for you · Paused" : Schedule.Suspended ? "A moment for you · Paused while away" : $"A moment for you · Next break in {(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
         }
     }
 
@@ -176,14 +178,39 @@ public partial class App : Application
 
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.BeginInvoke(() =>
     {
-        if (e.Reason == SessionSwitchReason.SessionLock) { sessionLocked = true; FinishBreak(); }
-        if (e.Reason == SessionSwitchReason.SessionUnlock) { sessionLocked = false; Schedule.Reset(Now); }
+        if (e.Reason == SessionSwitchReason.SessionLock) SetAway(AwayReason.SessionLocked, true);
+        if (e.Reason == SessionSwitchReason.SessionUnlock)
+        {
+            // Refresh the screensaver flag before clearing the lock flag: both
+            // conditions must be gone before the countdown resumes.
+            UpdateDesktopState();
+            SetAway(AwayReason.SessionLocked, false);
+        }
     });
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e) => Dispatcher.BeginInvoke(() =>
     {
-        if (e.Mode is PowerModes.Suspend or PowerModes.Resume) { FinishBreak(); Schedule.Reset(Now); }
+        if (e.Mode == PowerModes.Suspend) SetAway(AwayReason.Sleep, true);
+        if (e.Mode == PowerModes.Resume)
+        {
+            UpdateDesktopState();
+            SetAway(AwayReason.Sleep, false);
+        }
     });
+
+    private void UpdateDesktopState()
+    {
+        // A failed query leaves the previous state intact instead of resuming
+        // reminders by mistake on an inaccessible desktop.
+        if (DesktopState.TryGetScreenSaverRunning(out bool running))
+            SetAway(AwayReason.ScreenSaver, running);
+    }
+
+    private void SetAway(AwayReason reason, bool active)
+    {
+        if (active && !Schedule.Suspended) FinishBreak();
+        Schedule.SetAway(reason, active, Now);
+    }
 
     protected override void OnExit(ExitEventArgs e)
     {
