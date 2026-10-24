@@ -43,7 +43,9 @@ This is a break reminder, not a Windows security lock. Windows shortcuts, the se
 
 Your interval is stored locally in `%LOCALAPPDATA%\EyeProtect\settings.json`. The original settings folder is retained so earlier versions keep their saved interval. The app does not send telemetry or make network requests.
 
-The app does not register itself for startup. To launch quietly, create a shortcut to **A moment for you.exe** with `--tray` as an argument; you can place that shortcut in your Windows Startup folder.
+Enable **Autostart with Windows** in settings to launch quietly in the tray whenever you sign in. The checkbox saves immediately, applies only to your Windows account, and needs no administrator access. Uncheck it to remove autostart. It is off by default.
+
+Keep the portable executable in the folder you intend to use. If you move it or replace it with a copy in a different folder, turn autostart off and on again in that copy to update its location. You can also launch quietly yourself with the `--tray` argument.
 
 ## Build and test
 
@@ -80,8 +82,8 @@ To publish a release:
 3. Push an annotated tag matching the project version:
 
 ```powershell
-git tag -a v1.0.4 -m "Release v1.0.4"
-git push origin v1.0.4
+git tag -a v1.0.5 -m "Release v1.0.5"
+git push origin v1.0.5
 ```
 
 The tag workflow validates the version, builds the app, runs its checks, packages it, and verifies checksums. Only after those steps succeed does it publish a GitHub release with the executable, ZIP, and checksum file. No personal access token or extra repository secret is required; the release job uses the repository's `GITHUB_TOKEN`.

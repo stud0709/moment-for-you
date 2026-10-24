@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Security;
 using System.Windows;
 
 namespace MomentForYou;
@@ -7,11 +9,23 @@ namespace MomentForYou;
 public partial class SettingsWindow : Window
 {
     private readonly App app;
-    public SettingsWindow(App app)
+    private readonly WindowsStartup startup;
+    private bool startupEnabled;
+
+    public SettingsWindow(App app) : this(app, new WindowsStartup()) { }
+
+    internal SettingsWindow(App app, WindowsStartup startup)
     {
         InitializeComponent();
         this.app = app;
+        this.startup = startup;
         Interval.Text = app.Schedule.IntervalMinutes.ToString();
+        try { Autostart.IsChecked = startupEnabled = startup.IsEnabled; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            Autostart.IsEnabled = false;
+            Feedback.Text = "The Windows autostart setting is unavailable.";
+        }
     }
     public void Refresh()
     {
@@ -29,6 +43,21 @@ public partial class SettingsWindow : Window
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { Feedback.Text = "Could not save settings. Check your folder permissions."; }
     }
     private void OnBreakNow(object sender, RoutedEventArgs e) => app.StartBreak();
+    private void OnAutostart(object sender, RoutedEventArgs e)
+    {
+        bool enabled = Autostart.IsChecked == true;
+        try
+        {
+            startup.SetEnabled(enabled);
+            startupEnabled = enabled;
+            Feedback.Text = enabled ? "Autostart enabled. Starts quietly when you sign in." : "Autostart disabled.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException or InvalidOperationException)
+        {
+            Autostart.IsChecked = startupEnabled;
+            Feedback.Text = ex is InvalidOperationException ? ex.Message : "Could not change the Windows autostart setting.";
+        }
+    }
     private void OnPause(object sender, RoutedEventArgs e) => app.TogglePause();
     private void OnClosing(object? sender, CancelEventArgs e) { e.Cancel = true; Hide(); }
 }

@@ -10,6 +10,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using Microsoft.Win32;
 
 namespace MomentForYou;
 
@@ -226,6 +227,46 @@ internal static class SelfTests
             }
         });
         Test("Native tray icon, menu, pause and resume", () => ((App)Application.Current).VerifyTray());
+        Test("Autostart quotes paths, runs quietly, and removes only its own entry", () =>
+        {
+            var keyPath = @"Software\MomentForYou.AutostartTest-" + Guid.NewGuid().ToString("N");
+            var startup = new WindowsStartup(keyPath);
+            try
+            {
+                Assert(!startup.IsEnabled, "Autostart should be off without an entry.");
+                Assert(WindowsStartup.CreateCommand(@"C:\Program Files\A moment for you\A moment for you.exe") == "\"C:\\Program Files\\A moment for you\\A moment for you.exe\" --tray", "Autostart command is not quoted or quiet.");
+                startup.SetEnabled(true);
+                Assert(new WindowsStartup(keyPath).IsEnabled, "Autostart did not persist.");
+                using (var key = Registry.CurrentUser.OpenSubKey(keyPath, writable: true))
+                {
+                    Assert((string?)key!.GetValue("A moment for you") == WindowsStartup.CreateCommand(Environment.ProcessPath!), "Autostart did not use the running executable.");
+                    key.SetValue("Other app", "Keep this value");
+                }
+                startup.SetEnabled(false);
+                Assert(!startup.IsEnabled, "Autostart was not disabled.");
+                using var remaining = Registry.CurrentUser.OpenSubKey(keyPath);
+                Assert((string?)remaining?.GetValue("Other app") == "Keep this value", "Disabling autostart changed another entry.");
+            }
+            finally { Registry.CurrentUser.DeleteSubKey(keyPath, throwOnMissingSubKey: false); }
+        });
+        Test("Settings checkbox toggles autostart without enabling real Windows startup", () =>
+        {
+            var keyPath = @"Software\MomentForYou.AutostartTest-" + Guid.NewGuid().ToString("N");
+            var startup = new WindowsStartup(keyPath);
+            var window = new SettingsWindow((App)Application.Current, startup);
+            try
+            {
+                var checkbox = (CheckBox)window.FindName("Autostart");
+                Assert(checkbox.IsChecked == false, "Autostart checkbox should default to off.");
+                checkbox.IsChecked = true;
+                checkbox.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert(startup.IsEnabled, "Checkbox did not enable autostart.");
+                checkbox.IsChecked = false;
+                checkbox.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert(!startup.IsEnabled, "Checkbox did not disable autostart.");
+            }
+            finally { window.Hide(); Registry.CurrentUser.DeleteSubKey(keyPath, throwOnMissingSubKey: false); }
+        });
         Test("Version, author credit and homepage remain in the lower-right corner at common display scales", () =>
         {
             var window = new BreakWindow(() => { });
@@ -280,7 +321,7 @@ internal static class SelfTests
                 var outer = new System.Windows.Controls.Border { Background = settings.Background, Child = null };
                 settings.Content = null;
                 outer.Child = content;
-                RenderElement(outer, Path.Combine(directory, "settings-preview.png"), 490, 538);
+                RenderElement(outer, Path.Combine(directory, "settings-preview.png"), 490, 588);
             }
             finally { settings.Hide(); }
         }
