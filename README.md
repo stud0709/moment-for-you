@@ -12,11 +12,13 @@ There is **no countdown**. The **Done** button is available immediately, so you 
 
 ## Get started
 
-1. Open [Releases](https://github.com/stud0709/moment-for-you/releases/latest) and download **A moment for you.exe**, or download and extract the **win-x64.zip**.
-2. Run **A moment for you.exe**. The portable Windows x64 app needs no installer, administrator access, or separate .NET installation.
+1. Open [Releases](https://github.com/stud0709/moment-for-you/releases/latest), download the **win-x64.zip**, and extract it.
+2. Run **A moment for you.exe** from the extracted folder. The portable Windows x64 app needs no installer, administrator access, or separate .NET installation.
 3. Click **Take a break now** to try it, or set an interval between **1 and 240 minutes** and click **Save**.
 
 The app is unsigned, so Windows may show its usual reputation warning. Exit any older copy from its tray menu before opening a new version.
+
+You can also download the standalone **A.moment.for.you.exe**. GitHub uses dots instead of spaces in release asset names; the ZIP preserves **A moment for you.exe**. Both contain the same app.
 
 ## Settings and tray controls
 

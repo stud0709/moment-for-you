@@ -36,7 +36,10 @@ $testProcess.Refresh()
 Get-Content -LiteralPath (Join-Path $projectRoot 'artifacts/self-test-results.txt')
 if ($testProcess.ExitCode -ne 0) { throw "Packaged app self-tests failed with exit code $($testProcess.ExitCode)." }
 
-Copy-Item -LiteralPath $executable -Destination $releaseRoot -Force
+# GitHub converts spaces in uploaded asset names to dots. Use that public name
+# explicitly so the published checksum file matches the downloaded executable.
+$downloadExecutable = Join-Path $releaseRoot 'A.moment.for.you.exe'
+Copy-Item -LiteralPath $executable -Destination $downloadExecutable -Force
 Copy-Item -LiteralPath $executable -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $packageRoot
 $packageImages = Join-Path $packageRoot 'docs/images'
@@ -49,7 +52,7 @@ Copy-Item -LiteralPath $notes -Destination (Join-Path $packageRoot 'Release note
 
 $zipPath = Join-Path $releaseRoot "A-moment-for-you-$version-win-x64.zip"
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $zipPath -Force
-$checksumLines = foreach ($file in @((Join-Path $releaseRoot 'A moment for you.exe'), $zipPath)) {
+$checksumLines = foreach ($file in @($downloadExecutable, $zipPath)) {
     $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
     '{0}  {1}' -f $hash, [System.IO.Path]::GetFileName($file)
 }
