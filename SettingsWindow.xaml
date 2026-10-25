@@ -17,6 +17,9 @@
     <StackPanel Grid.Row="2">
       <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="Take a break now" Click="OnBreakNow" Padding="14,13"/><Button x:Name="PauseButton" Grid.Column="2" Content="Pause reminders" Click="OnPause" Background="#2C4438" Foreground="{StaticResource Ink}" Padding="14,13"/></Grid>
       <TextBlock Text="Closing this window keeps reminders in the tray.&#10;Right-click the tray icon to set the interval or exit." TextAlignment="Center" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,22,0,0"/>
+      <TextBlock x:Name="Footer" Style="{StaticResource AppFooterText}" HorizontalAlignment="Right" Margin="0,18,0,0">
+        <Run x:Name="FooterVersion"/><Run Text=" · © stud0709 · "/><Hyperlink x:Name="HomepageLink" NavigateUri="https://github.com/stud0709/moment-for-you" RequestNavigate="OnProjectHomepage" Style="{StaticResource ProjectHomepageLink}">Project homepage</Hyperlink>
+      </TextBlock>
     </StackPanel>
   </Grid>
 </Window>

@@ -1,7 +1,5 @@
 using System;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -20,9 +18,8 @@ public partial class BreakWindow : Window
     {
         InitializeComponent();
         this.finish = finish;
-        this.openHomepage = openHomepage ?? OpenInBrowser;
-        var version = Assembly.GetExecutingAssembly().GetName().Version;
-        FooterVersion.Text = "v" + version!.ToString(3);
+        this.openHomepage = openHomepage ?? ProjectInfo.OpenHomepage;
+        FooterVersion.Text = ProjectInfo.DisplayVersion;
     }
 
     internal void PositionOn(Forms.Screen screen)
@@ -53,11 +50,6 @@ public partial class BreakWindow : Window
         e.Handled = true;
         finish();
         openHomepage(e.Uri);
-    }
-    private static void OpenInBrowser(Uri uri)
-    {
-        try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
-        catch (Win32Exception) { System.Windows.Clipboard.SetText(uri.AbsoluteUri); }
     }
     private void OnDone(object sender, RoutedEventArgs e) => finish();
     private void OnKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; finish(); } }

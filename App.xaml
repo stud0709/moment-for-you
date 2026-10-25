@@ -6,6 +6,13 @@
     <Style TargetType="TextBlock">
       <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
+    <Style x:Key="AppFooterText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+    </Style>
+    <Style x:Key="ProjectHomepageLink" TargetType="Hyperlink">
+      <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+    </Style>
     <Style TargetType="Window">
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="Background" Value="#101E1B"/>

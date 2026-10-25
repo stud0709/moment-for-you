@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Security;
 using System.Windows;
+using System.Windows.Navigation;
 
 namespace MomentForYou;
 
@@ -19,6 +20,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         this.app = app;
         this.startup = startup;
+        FooterVersion.Text = ProjectInfo.DisplayVersion;
         Interval.Text = app.Schedule.IntervalMinutes.ToString();
         try { Autostart.IsChecked = startupEnabled = startup.IsEnabled; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
@@ -43,6 +45,11 @@ public partial class SettingsWindow : Window
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { Feedback.Text = "Could not save settings. Check your folder permissions."; }
     }
     private void OnBreakNow(object sender, RoutedEventArgs e) => app.StartBreak();
+    private void OnProjectHomepage(object sender, RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        ProjectInfo.OpenHomepage(e.Uri);
+    }
     private void OnAutostart(object sender, RoutedEventArgs e)
     {
         bool enabled = Autostart.IsChecked == true;

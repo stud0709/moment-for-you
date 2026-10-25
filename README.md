@@ -35,6 +35,8 @@ Closing the settings window keeps the app running in the notification area. The 
 | **Pause reminders / Resume reminders** | Pause automatic reminders; resuming starts a full new interval. |
 | **Exit** | Dismiss every break window and quit. |
 
+The settings pop-up and break screen both show the running version, **© stud0709**, and a clickable **Project homepage** link in the same footer style.
+
 The countdown stops while Windows is locked, a screensaver is running, or the PC is asleep. When you return, it starts over with a full new interval; if both a lock and screensaver are active, both must end first. A manual pause stays in effect until you choose Resume reminders. If a break is already showing when you leave, it is dismissed and a full interval waits for your return.
 
 Connecting or disconnecting a monitor during a break rebuilds the windows while keeping the break open. The app supports per-monitor scaling and monitors positioned to the left of the primary screen.
@@ -82,8 +84,8 @@ To publish a release:
 3. Push an annotated tag matching the project version:
 
 ```powershell
-git tag -a v1.1.0 -m "Release v1.1.0"
-git push origin v1.1.0
+git tag -a v1.1.1 -m "Release v1.1.1"
+git push origin v1.1.1
 ```
 
 The tag workflow validates the version, builds the app, runs its checks, packages it, and verifies checksums. Only after those steps succeed does it publish a GitHub release with the executable, ZIP, and checksum file. No personal access token or extra repository secret is required; the release job uses the repository's `GITHUB_TOKEN`.
