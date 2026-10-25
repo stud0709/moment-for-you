@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -31,6 +33,15 @@ internal static class SelfTests
         static void TickUntil(BreakSchedule schedule, int before)
         { for (int second = 1; second < before; second++) if (schedule.Tick(At(second))) throw new InvalidOperationException("Break started early."); }
 
+        Test("App uses Windows .NET Framework 4.8 without the modern .NET runtime", () =>
+        {
+            var framework = typeof(App).Assembly.GetCustomAttribute<TargetFrameworkAttribute>();
+            Assert(framework?.FrameworkName == ".NETFramework,Version=v4.8", "Incorrect target framework.");
+            Assert(Environment.Version.Major == 4, "The app is not running on the Windows Framework CLR.");
+            Assert(Environment.Is64BitProcess, "The app is not running as Windows x64.");
+            foreach (var reference in typeof(App).Assembly.GetReferencedAssemblies())
+                Assert(reference.Name != "System.Text.Json" && reference.Name != "System.Private.CoreLib", "A modern .NET runtime dependency remains.");
+        });
         Test("Default interval is 20 minutes", () => Assert(new Settings().IntervalMinutes == 20, "Incorrect default."));
         Test("Automatic deadline fires at exactly 20 minutes", () =>
         {
@@ -159,6 +170,8 @@ internal static class SelfTests
                 Assert(Settings.Load(path).IntervalMinutes == 37, "Settings roundtrip failed.");
                 new Settings { IntervalMinutes = 1 }.Save(path);
                 Assert(Settings.Load(path).IntervalMinutes == 1, "Settings update failed.");
+                File.WriteAllText(path, "{\n  \"IntervalMinutes\": 37\n}");
+                Assert(Settings.Load(path).IntervalMinutes == 37, "Settings from the earlier .NET 10 version could not be loaded.");
                 File.WriteAllText(path, "{not json");
                 Assert(Settings.Load(path).IntervalMinutes == 20, "Corrupt settings failed.");
                 File.WriteAllText(path, "{\"IntervalMinutes\":0}");
@@ -239,7 +252,8 @@ internal static class SelfTests
                 Assert(new WindowsStartup(keyPath).IsEnabled, "Autostart did not persist.");
                 using (var key = Registry.CurrentUser.OpenSubKey(keyPath, writable: true))
                 {
-                    Assert((string?)key!.GetValue("A moment for you") == WindowsStartup.CreateCommand(Environment.ProcessPath!), "Autostart did not use the running executable.");
+                    using var process = Process.GetCurrentProcess();
+                    Assert((string?)key!.GetValue("A moment for you") == WindowsStartup.CreateCommand(process.MainModule!.FileName), "Autostart did not use the running executable.");
                     key.SetValue("Other app", "Keep this value");
                 }
                 startup.SetEnabled(false);

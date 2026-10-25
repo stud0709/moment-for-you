@@ -15,12 +15,12 @@ The **Project homepage** link in the lower-right corner also dismisses all break
 ## Get started
 
 1. Open [Releases](https://github.com/stud0709/moment-for-you/releases/latest), download the **win-x64.zip**, and extract it.
-2. Run **A moment for you.exe** from the extracted folder. The portable Windows x64 app needs no installer, administrator access, or separate .NET installation.
+2. Run **A moment for you.exe** from the extracted folder. The small Windows x64 executable uses **.NET Framework 4.8**, included with Windows 10 version 1903 and later and Windows 11. It needs no installer, administrator access, or separate .NET 10 installation.
 3. Click **Take a break now** to try it, or set an interval between **1 and 240 minutes** and click **Save**.
 
 The app is unsigned, so Windows may show its usual reputation warning. Exit any older copy from its tray menu before opening a new version.
 
-You can also download the standalone **A.moment.for.you.exe**. GitHub uses dots instead of spaces in release asset names; the ZIP preserves **A moment for you.exe**. Both contain the same app.
+You can also download the standalone **A.moment.for.you.exe**. GitHub uses dots instead of spaces in release asset names; the ZIP preserves **A moment for you.exe**. Both contain the same app. Only the EXE is required to run it; screenshots and documentation in the ZIP are optional. Older Windows 10 installations may need .NET Framework 4.8 installed first.
 
 ## Settings and tray controls
 
@@ -49,13 +49,13 @@ Keep the portable executable in the folder you intend to use. If you move it or 
 
 ## Build and test
 
-Requires Windows, the **.NET 10 SDK**, and PowerShell 7. No external NuGet packages are used.
+Requires Windows, a **.NET 10 SDK** for compilation, and PowerShell 7. The app itself targets **.NET Framework 4.8**. Its reference assemblies are restored automatically from the build-only `Microsoft.NETFramework.ReferenceAssemblies` NuGet package; no NuGet runtime dependencies are shipped.
 
 ```powershell
 ./scripts/Build.ps1
 ```
 
-This publishes the self-contained x64 app, runs its automated checks, and writes the executable, ZIP, and `SHA256SUMS.txt` to `artifacts/release/`.
+This builds the x64 app, copies only its EXE to an isolated folder, and runs the automated checks without any companion DLL or configuration file. It also rejects an executable of 1 MiB or larger to prevent runtime bundling from returning. The executable, ZIP, and `SHA256SUMS.txt` are written to `artifacts/release/<version>/`.
 
 For a quick development build:
 
@@ -65,7 +65,7 @@ dotnet run -c Release --no-build -- --self-test
 dotnet run -c Release --no-build -- --render-preview artifacts/break-preview.png
 ```
 
-`--self-test` checks scheduling, immediate dismissal and long breaks, pause/resume, lock/screensaver/sleep countdown freezing and overlapping conditions, clock gaps, settings persistence and invalid settings, the actual WPF Done button and homepage action, native window bounds on every connected monitor, tray menu actions, and the version/credit/homepage footer at common screen sizes and scaling settings. It writes `artifacts/self-test-results.txt` and returns a nonzero exit code on failure. It briefly creates a tray icon but never displays a break.
+`--self-test` verifies that the app runs on the Windows Framework CLR rather than modern .NET, then checks scheduling, immediate dismissal and long breaks, pause/resume, lock/screensaver/sleep behavior and overlapping conditions, clock gaps, settings compatibility with earlier releases, the WPF Done button and homepage action, native window bounds on every connected monitor, tray menu actions, autostart, and footer placement at common screen sizes and scaling settings. It writes `artifacts/self-test-results.txt` and returns a nonzero exit code on failure. It briefly creates a tray icon but never displays a break. Autostart tests use isolated registry entries and do not enable Windows startup on the test PC.
 
 `--render-preview` renders the actual WPF break content and settings window to PNG without covering your desktop. The screenshots above come from this renderer.
 
@@ -82,8 +82,8 @@ To publish a release:
 3. Push an annotated tag matching the project version:
 
 ```powershell
-git tag -a v1.0.5 -m "Release v1.0.5"
-git push origin v1.0.5
+git tag -a v1.1.0 -m "Release v1.1.0"
+git push origin v1.1.0
 ```
 
 The tag workflow validates the version, builds the app, runs its checks, packages it, and verifies checksums. Only after those steps succeed does it publish a GitHub release with the executable, ZIP, and checksum file. No personal access token or extra repository secret is required; the release job uses the repository's `GITHUB_TOKEN`.

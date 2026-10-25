@@ -12,6 +12,8 @@ internal sealed class WindowsStartup
     internal WindowsStartup(string keyPath = @"Software\Microsoft\Windows\CurrentVersion\Run")
     { this.keyPath = keyPath; }
 
+    internal static string ExecutablePath => typeof(App).Assembly.Location;
+
     internal bool IsEnabled
     {
         get
@@ -23,10 +25,10 @@ internal sealed class WindowsStartup
 
     internal static string CreateCommand(string executable)
     {
-        if (!Path.IsPathFullyQualified(executable) ||
+        if (!Path.IsPathRooted(executable) || Path.GetPathRoot(executable)!.Length < 3 ||
             !string.Equals(Path.GetExtension(executable), ".exe", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(Path.GetFileName(executable), "dotnet.exe", StringComparison.OrdinalIgnoreCase) ||
-            executable.Contains('"'))
+            executable.IndexOf('"') >= 0)
             throw new InvalidOperationException("Enable autostart from the published app executable.");
         var command = "\"" + executable + "\" --tray";
         if (command.Length > 260)
@@ -38,8 +40,7 @@ internal sealed class WindowsStartup
     {
         if (enabled)
         {
-            var command = CreateCommand(Environment.ProcessPath ??
-                throw new InvalidOperationException("Cannot find the app executable."));
+            var command = CreateCommand(ExecutablePath);
             using var key = Registry.CurrentUser.CreateSubKey(keyPath) ??
                 throw new IOException("Cannot access the Windows startup setting.");
             key.SetValue(ValueName, command, RegistryValueKind.String);

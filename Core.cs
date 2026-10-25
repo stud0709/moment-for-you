@@ -1,11 +1,14 @@
 using System;
 using System.IO;
-using System.Text.Json;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 
 namespace MomentForYou;
 
+[DataContract]
 public sealed class Settings
 {
+    [DataMember(Name = "IntervalMinutes")]
     public int IntervalMinutes { get; set; } = 20;
     public static bool IsValidInterval(int value) => value >= 1 && value <= 240;
     // Retain the settings location so rebranding preserves existing intervals.
@@ -15,10 +18,11 @@ public sealed class Settings
     {
         try
         {
-            var settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path ?? FilePath));
+            using var stream = File.OpenRead(path ?? FilePath);
+            var settings = new DataContractJsonSerializer(typeof(Settings)).ReadObject(stream) as Settings;
             return settings != null && IsValidInterval(settings.IntervalMinutes) ? settings : new Settings();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return new Settings(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or System.Xml.XmlException) { return new Settings(); }
     }
 
     public void Save(string? path = null)
@@ -27,8 +31,10 @@ public sealed class Settings
         var destination = path ?? FilePath;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
         var temporary = destination + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temporary, destination, true);
+        using (var stream = File.Create(temporary))
+            new DataContractJsonSerializer(typeof(Settings)).WriteObject(stream, this);
+        if (File.Exists(destination)) File.Replace(temporary, destination, null);
+        else File.Move(temporary, destination);
     }
 }
 

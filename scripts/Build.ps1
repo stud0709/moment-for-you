@@ -13,19 +13,23 @@ if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
     throw "Tag $env:GITHUB_REF_NAME does not match project version v$version."
 }
 
-$releaseRoot = Join-Path $projectRoot 'artifacts/release'
+$releaseRoot = Join-Path $projectRoot "artifacts/release/$version"
 # A fresh staging folder prevents files from an earlier publish entering the ZIP.
 $stagingRoot = Join-Path $projectRoot ('artifacts/staging/' + [Guid]::NewGuid().ToString('N'))
-$publishRoot = Join-Path $stagingRoot 'publish'
+$buildRoot = Join-Path $stagingRoot 'build'
+$verifyRoot = Join-Path $stagingRoot 'standalone'
 $packageRoot = Join-Path $stagingRoot 'package'
-New-Item -ItemType Directory -Path $releaseRoot, $packageRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $releaseRoot, $packageRoot, $verifyRoot -Force | Out-Null
 
-& dotnet publish $projectPath -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
-    -p:DebugType=None -p:DebugSymbols=false -o $publishRoot
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
+& dotnet build $projectPath -c Release -p:DebugType=None -p:DebugSymbols=false -o $buildRoot
+if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE." }
 
-$executable = Join-Path $publishRoot 'A moment for you.exe'
+# Test the exact portable artifact in a folder containing only the EXE. This
+# catches accidental reliance on a sidecar DLL, runtimeconfig, or .exe.config.
+Copy-Item -LiteralPath (Join-Path $buildRoot 'A moment for you.exe') -Destination $verifyRoot
+$executable = Join-Path $verifyRoot 'A moment for you.exe'
+if ((Get-ChildItem -LiteralPath $verifyRoot -File).Count -ne 1) { throw 'The standalone test directory must contain only the EXE.' }
+if ((Get-Item -LiteralPath $executable).Length -ge 1MB) { throw 'The executable exceeds the 1 MiB release size limit.' }
 $testProcess = Start-Process -FilePath $executable -ArgumentList '--self-test' `
     -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
 if (-not $testProcess.WaitForExit(120000)) {
@@ -57,4 +61,8 @@ $checksumLines = foreach ($file in @($downloadExecutable, $zipPath)) {
     '{0}  {1}' -f $hash, [System.IO.Path]::GetFileName($file)
 }
 $checksumLines | Set-Content -LiteralPath (Join-Path $releaseRoot 'SHA256SUMS.txt') -Encoding utf8NoBOM
+Write-Output ("Standalone EXE size: {0:N1} KiB" -f ((Get-Item -LiteralPath $executable).Length / 1KB))
+if ($env:GITHUB_OUTPUT) {
+    "release-directory=$releaseRoot" | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8
+}
 Write-Output "Release $version is ready in $releaseRoot"

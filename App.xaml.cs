@@ -169,14 +169,14 @@ public partial class App : Application
         }
     }
 
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() =>
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.InvokeAsync(() =>
     {
         if (!Schedule.InBreak) return;
         CloseOverlays();
         OpenOverlays();
     });
 
-    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.BeginInvoke(() =>
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.InvokeAsync(() =>
     {
         if (e.Reason == SessionSwitchReason.SessionLock) SetAway(AwayReason.SessionLocked, true);
         if (e.Reason == SessionSwitchReason.SessionUnlock)
@@ -188,7 +188,7 @@ public partial class App : Application
         }
     });
 
-    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e) => Dispatcher.BeginInvoke(() =>
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e) => Dispatcher.InvokeAsync(() =>
     {
         if (e.Mode == PowerModes.Suspend) SetAway(AwayReason.Sleep, true);
         if (e.Mode == PowerModes.Resume)
