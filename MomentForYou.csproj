@@ -18,7 +18,7 @@
     <Product>A moment for you</Product>
     <Description>A gentle reminder to step away, move around, and rest your eyes.</Description>
     <Copyright>© stud0709</Copyright>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>

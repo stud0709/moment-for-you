@@ -92,9 +92,9 @@ internal static class SelfTests
             Assert(!schedule.Tick(At(4000)), "Reminder fired after sleep.");
             Assert(schedule.UntilBreak(At(4000)) == TimeSpan.FromMinutes(20), "Gap failed to reset.");
         });
-        Test("Lock, screensaver and sleep stop reminders and start a full interval on return", () =>
+        Test("Lock, screensaver, sleep, closed lid and display off restart a full interval on return", () =>
         {
-            foreach (var reason in new[] { AwayReason.SessionLocked, AwayReason.ScreenSaver, AwayReason.Sleep })
+            foreach (var reason in new[] { AwayReason.SessionLocked, AwayReason.ScreenSaver, AwayReason.Sleep, AwayReason.LidClosed, AwayReason.DisplayOff })
             {
                 var schedule = new BreakSchedule(1, At(0));
                 schedule.SetAway(reason, true, At(20));
@@ -116,6 +116,64 @@ internal static class SelfTests
             Assert(schedule.UntilBreak(At(1000)) == At(50), "Overlapping pauses changed the remaining time.");
             schedule.SetAway(AwayReason.ScreenSaver, false, At(1000));
             Assert(!schedule.Suspended && schedule.UntilBreak(At(1000)) == At(60), "Screensaver exit did not start a full new interval.");
+        });
+        Test("Lid reopening waits for the display and sleep to end before restarting", () =>
+        {
+            var schedule = new BreakSchedule(1, At(0));
+            schedule.SetAway(AwayReason.LidClosed, true, At(10));
+            schedule.SetAway(AwayReason.DisplayOff, true, At(11));
+            schedule.SetAway(AwayReason.Sleep, true, At(12));
+            schedule.SetAway(AwayReason.LidClosed, false, At(1000));
+            schedule.SetAway(AwayReason.Sleep, false, At(1001));
+            Assert(schedule.Suspended && !schedule.Tick(At(1001)), "Resume cleared the display-off state.");
+            schedule.SetAway(AwayReason.DisplayOff, false, At(1002));
+            schedule.SetAway(AwayReason.DisplayOff, false, At(1003));
+            Assert(!schedule.Suspended && schedule.UntilBreak(At(1003)) == At(59), "Return or duplicate notifications failed to preserve the new interval.");
+            schedule.SetPaused(true, At(1004));
+            schedule.SetAway(AwayReason.LidClosed, true, At(1005));
+            schedule.SetAway(AwayReason.LidClosed, false, At(1006));
+            Assert(schedule.Paused, "Lid reopening cleared a manual pause.");
+        });
+        Test("Lid, display, focus and missed sleep events close every real blocker window", () =>
+            ((App)Application.Current).VerifyDesktopRecovery());
+        Test("Native power notifications decode lid and session display changes", () =>
+        {
+            var changes = new List<(AwayReason reason, bool active)>();
+            IntPtr handle;
+            using (var monitor = new DesktopPowerMonitor((reason, active) => changes.Add((reason, active))))
+            {
+                handle = monitor.Handle;
+                Assert(IsWindow(handle) && !IsWindowVisible(handle), "Power event window is missing or visible.");
+                void Send(Guid setting, int value, int length = 4)
+                {
+                    var buffer = Marshal.AllocHGlobal(24);
+                    try
+                    {
+                        Marshal.Copy(setting.ToByteArray(), 0, buffer, 16);
+                        Marshal.WriteInt32(buffer, 16, length);
+                        Marshal.WriteInt32(buffer, 20, value);
+                        SendMessage(handle, 0x0218, new IntPtr(0x8013), buffer);
+                    }
+                    finally { Marshal.FreeHGlobal(buffer); }
+                }
+                foreach (var setting in new[] { DesktopPowerMonitor.LidState, DesktopPowerMonitor.DisplayState })
+                {
+                    var reason = setting == DesktopPowerMonitor.LidState ? AwayReason.LidClosed : AwayReason.DisplayOff;
+                    Send(setting, 0);
+                    Assert(changes[changes.Count - 1] == (reason, true), "Off/closed notification failed.");
+                    Send(setting, 1);
+                    Assert(changes[changes.Count - 1] == (reason, false), "On/open notification failed.");
+                }
+                Send(DesktopPowerMonitor.DisplayState, 2);
+                Assert(changes[changes.Count - 1] == (AwayReason.DisplayOff, false), "Dimming incorrectly suspended reminders.");
+                int count = changes.Count;
+                Send(Guid.Empty, 0);
+                Send(DesktopPowerMonitor.LidState, 2);
+                Send(DesktopPowerMonitor.DisplayState, 3);
+                Send(DesktopPowerMonitor.LidState, 0, 0);
+                Assert(changes.Count == count, "Invalid or unrelated power notification changed the desktop state.");
+            }
+            Assert(!IsWindow(handle), "Power event window was not disposed.");
         });
         Test("Repeated screensaver polls do not reset the new interval after returning", () =>
         {
@@ -365,4 +423,9 @@ internal static class SelfTests
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowVisible(IntPtr handle);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindow(IntPtr handle);
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
 }

@@ -37,9 +37,9 @@ Closing the settings window keeps the app running in the notification area. The 
 
 The settings pop-up and break screen both show the running version, **© stud0709**, and a clickable **Project homepage** link in the same footer style.
 
-The countdown stops while Windows is locked, a screensaver is running, or the PC is asleep. When you return, it starts over with a full new interval; if both a lock and screensaver are active, both must end first. A manual pause stays in effect until you choose Resume reminders. If a break is already showing when you leave, it is dismissed and a full interval waits for your return.
+The countdown stops while Windows is locked, a screensaver is running, the PC is asleep, the laptop lid is closed, or the session display is off. When you return, it starts over with a full new interval; all active away conditions must end first. A manual pause stays in effect until you choose Resume reminders. If a break is already showing when you leave, it is dismissed and a full interval waits for your return.
 
-Connecting or disconnecting a monitor during a break rebuilds the windows while keeping the break open. The app supports per-monitor scaling and monitors positioned to the left of the primary screen.
+Connecting or disconnecting a monitor dismisses any current break and starts a fresh interval. Switching focus to another window (including Alt+Tab), minimizing the blocker, or returning after a long interruption in the app's timer also dismisses the break. These safeguards keep a hidden break window from interfering with desktop interaction after lid, docking, or display changes. The app supports per-monitor scaling and monitors positioned to the left of the primary screen.
 
 This is a break reminder, not a Windows security lock. Windows shortcuts, the secure desktop, and some privileged or exclusive fullscreen windows can still take precedence.
 
@@ -67,11 +67,13 @@ dotnet run -c Release --no-build -- --self-test
 dotnet run -c Release --no-build -- --render-preview artifacts/break-preview.png
 ```
 
-`--self-test` verifies that the app runs on the Windows Framework CLR rather than modern .NET, then checks scheduling, immediate dismissal and long breaks, pause/resume, lock/screensaver/sleep behavior and overlapping conditions, clock gaps, settings compatibility with earlier releases, the WPF Done button and homepage action, native window bounds on every connected monitor, tray menu actions, autostart, and footer placement at common screen sizes and scaling settings. It writes `artifacts/self-test-results.txt` and returns a nonzero exit code on failure. It briefly creates a tray icon but never displays a break. Autostart tests use isolated registry entries and do not enable Windows startup on the test PC.
+`--self-test` verifies that the app runs on the Windows Framework CLR rather than modern .NET, then checks scheduling, immediate dismissal and long breaks, pause/resume, lock/screensaver/sleep/lid/display behavior and overlapping conditions, native power notification decoding, hidden blocker cleanup, clock gaps, settings compatibility with earlier releases, the WPF Done button and homepage action, native window bounds on every connected monitor, tray menu actions, autostart, and footer placement at common screen sizes and scaling settings. It writes `artifacts/self-test-results.txt` and returns a nonzero exit code on failure. It briefly creates a tray icon but never displays a break. Autostart tests use isolated registry entries and do not enable Windows startup on the test PC.
 
 `--render-preview` renders the actual WPF break content and settings window to PNG without covering your desktop. The screenshots above come from this renderer.
 
 For manual verification, use **Take a break now** with multiple monitors and mixed scaling. Check that each screen, including its taskbar, is covered and Done is available immediately. Confirm that clicking Done on a secondary monitor closes every break window, Esc works, and monitor changes during a break are handled. Set a 1-minute interval to test automatic reminders and confirm pause suppresses them.
+
+To check lid recovery, show a break, close and reopen the laptop lid without locking Windows, and confirm other apps respond immediately and a fresh interval begins. Repeat with the lid configured to do nothing, with sleep enabled, and with an external monitor or dock attached. Also check Alt+Tab during a break, screen power-off without sleep, and docking/undocking: every blocker should close. Normal breaks should remain open until Done unless one of these desktop transitions occurs.
 
 ## Release pipeline
 
@@ -84,8 +86,8 @@ To publish a release:
 3. Push an annotated tag matching the project version:
 
 ```powershell
-git tag -a v1.1.1 -m "Release v1.1.1"
-git push origin v1.1.1
+git tag -a v1.1.2 -m "Release v1.1.2"
+git push origin v1.1.2
 ```
 
 The tag workflow validates the version, builds the app, runs its checks, packages it, and verifies checksums. Only after those steps succeed does it publish a GitHub release with the executable, ZIP, and checksum file. No personal access token or extra repository secret is required; the release job uses the repository's `GITHUB_TOKEN`.

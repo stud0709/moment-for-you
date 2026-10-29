@@ -39,7 +39,7 @@ public sealed class Settings
 }
 
 [Flags]
-public enum AwayReason { None = 0, SessionLocked = 1, ScreenSaver = 2, Sleep = 4 }
+public enum AwayReason { None = 0, SessionLocked = 1, ScreenSaver = 2, Sleep = 4, LidClosed = 8, DisplayOff = 16 }
 
 // All deadlines use monotonic time, so wall-clock adjustments cannot trigger a break.
 public sealed class BreakSchedule

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
@@ -24,6 +25,8 @@ public partial class App : Application
     private Forms.ToolStripMenuItem? pauseItem;
     private Mutex? instance;
     private bool ownsInstance;
+    private DesktopPowerMonitor? powerMonitor;
+    private TimeSpan lastUiTick;
     public BreakSchedule Schedule { get; private set; } = new(20, TimeSpan.Zero);
     public TimeSpan Now => clock.Elapsed;
 
@@ -41,6 +44,7 @@ public partial class App : Application
         UpdateDesktopState();
         CreateTray();
         timer.Tick += OnTick;
+        lastUiTick = Now;
         timer.Start();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -53,6 +57,9 @@ public partial class App : Application
             MessageBox.Show("A moment for you encountered an error and will close.\n\n" + args.Exception.Message, "A moment for you");
             Shutdown(1);
         };
+        // Queue outside the native window procedure before closing WPF windows.
+        powerMonitor = new DesktopPowerMonitor((reason, active) =>
+            Dispatcher.InvokeAsync(() => SetAway(reason, active)));
         if (!e.Args.Contains("--tray")) ShowSettings();
     }
 
@@ -159,7 +166,16 @@ public partial class App : Application
 
     private void OnTick(object? sender, EventArgs e)
     {
+        var now = Now;
+        if (now - lastUiTick > TimeSpan.FromSeconds(30))
+        {
+            // Also recover when firmware omits a sleep/power notification.
+            FinishBreak();
+            Schedule.Reset(now);
+        }
+        lastUiTick = now;
         UpdateDesktopState();
+        CheckBreakVisibility();
         if (Schedule.Tick(Now)) StartBreak();
         settingsWindow?.Refresh();
         if (tray != null)
@@ -171,10 +187,25 @@ public partial class App : Application
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.InvokeAsync(() =>
     {
-        if (!Schedule.InBreak) return;
-        CloseOverlays();
-        OpenOverlays();
+        HandleDisplayChange();
     });
+
+    private void HandleDisplayChange()
+    {
+        // Lid and docking changes can invalidate WPF surfaces or move focus to
+        // another app. Release all windows instead of recreating a hidden blocker.
+        FinishBreak();
+        Schedule.Reset(Now);
+    }
+
+    private void CheckBreakVisibility()
+    {
+        if (!Schedule.InBreak) return;
+        var foreground = GetForegroundWindow();
+        if (!overlays.Any(window => window.IsVisible && window.WindowState != WindowState.Minimized &&
+            new WindowInteropHelper(window).Handle == foreground))
+            FinishBreak();
+    }
 
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.InvokeAsync(() =>
     {
@@ -212,9 +243,52 @@ public partial class App : Application
         Schedule.SetAway(reason, active, Now);
     }
 
+    internal void VerifyDesktopRecovery()
+    {
+        // Exercise real window cleanup using hidden HWNDs; never cover the desktop.
+        var originalSchedule = Schedule;
+        var originalTick = lastUiTick;
+        void Verify(Action transition, string name)
+        {
+            Schedule = new BreakSchedule(20, Now);
+            for (int i = 0; i < 2; i++)
+            {
+                var window = new BreakWindow(FinishBreak);
+                new WindowInteropHelper(window).EnsureHandle();
+                overlays.Add(window);
+            }
+            Schedule.StartBreak();
+            transition();
+            if (Schedule.InBreak || overlays.Count != 0)
+                throw new InvalidOperationException(name + " left a blocker open.");
+            if (Schedule.UntilBreak(Now) < TimeSpan.FromMinutes(19))
+                throw new InvalidOperationException(name + " failed to restart the interval.");
+        }
+        try
+        {
+            foreach (var reason in new[] { AwayReason.LidClosed, AwayReason.DisplayOff, AwayReason.Sleep, AwayReason.SessionLocked })
+                Verify(() =>
+                {
+                    SetAway(reason, true);
+                    if (!Schedule.Suspended) throw new InvalidOperationException(reason + " did not suspend reminders.");
+                    SetAway(reason, false);
+                }, reason.ToString());
+            Verify(HandleDisplayChange, "Monitor layout change");
+            Verify(CheckBreakVisibility, "Hidden/unfocused break");
+            Verify(() => { lastUiTick = Now - TimeSpan.FromMinutes(2); OnTick(this, EventArgs.Empty); }, "Missed sleep notification");
+        }
+        finally
+        {
+            CloseOverlays();
+            Schedule = originalSchedule;
+            lastUiTick = originalTick;
+        }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         timer.Stop();
+        powerMonitor?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
@@ -242,6 +316,9 @@ public partial class App : Application
         try { return (System.Drawing.Icon)System.Drawing.Icon.FromHandle(handle).Clone(); }
         finally { DestroyIcon(handle); }
     }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
